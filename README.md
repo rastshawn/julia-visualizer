@@ -4,7 +4,7 @@ This is an audio visualizer using the PulseAudio library that uses the terminal 
 
 ## Demo
 
-A demo can be found here: 
+A demo can be found on [YouTube](https://www.youtube.com/watch?v=wvZ3kJE-9O4):
 
 
 [![Demo on YouTube](https://img.youtube.com/vi/wvZ3kJE-9O4/0.jpg)](https://www.youtube.com/watch?v=wvZ3kJE-9O4)
