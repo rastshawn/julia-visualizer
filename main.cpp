@@ -12,45 +12,50 @@
 #include <pulse/pulseaudio.h>
 #include <pulse/simple.h>
 #include <pulse/def.h>
+#include "complex.h"
 
-float dist(float x1, float y1, float x2, float y2) {
-	float result = sqrt(pow(x2-x1, 2) + pow(y2-y1, 2));
-	return result;
-}
-class Complex {
-	public: 
-		float real;
-		float imaginary;
-		bool lessThan(float num) {
-			return (dist(real, imaginary, 0, 0) < num);
-		}
-		Complex multiply(Complex x) {
-			float newR = (this->real*x.real) - this->imaginary*x.imaginary;
-			float newI = (this->real*x.imaginary) + this->imaginary*x.real;
-			Complex ret(newR, newI);
-			return ret;
-		}
-		Complex add(Complex x) {
-			float newR = this->real + x.real;
-			float newI = this->imaginary + x.imaginary;
-			Complex ret(newR, newI);
-			return ret;
-		}
-		Complex(float real, float imaginary) {
-			this->real = real;
-			this->imaginary = imaginary;
-		}
-};
-int BAILOUT = 20;
+/**
+ * This program connects to a pulseaudio stream and uses volume levels in the left channel of that stream to 
+ * generate Julia sets in a terminal. The volume level is set to the real component of the complex number, and 
+ * the imaginary component is set to an oscilating value.
+ * 
+ * The audio capture is in a separate thread for performance. When the sleep function is removed from the drawing (main) thread, stuttering occurs. 
+ */
 
-float interpolate(float var, float min1, float max1, float min2, float max2) {
-	float numerator = (var - min1) * (max2 - min2);
-	float denominator = (max1 - min1);
-	float ret =  min2 + (numerator / denominator);
-	return ret;
-};
-//Complex c = Complex(-.66, -.71);
+// define colors for printing to the terminal
+const std::string char_ = "\u2588";
+const std::string black = "\033[22;30m";
+const std::string red = "\033[22;31m";
+const std::string l_red = "\033[01;31m";
+const std::string green = "\033[22;32m";
+const std::string l_green = "\033[01;32m";
+const std::string orange = "\033[22;33m";
+const std::string yellow = "\033[01;33m";
+const std::string blue = "\033[22;34m";
+const std::string l_blue = "\033[01;34m";
+const std::string magenta = "\033[22;35m";
+const std::string l_magenta = "\033[01;35m";
+const std::string cyan = "\033[22;36m";
+const std::string l_cyan = "\033[01;36m";
+const std::string gray = "\033[22;37m";
+const std::string white = "\033[01;37m";
+
+
+// JULIA functions and variables //
+
+// The edges of the screen will be mapped to these values on the julia set graph. 
+const float xAxisMin = -1.5;
+const float xAxisMax = 1.5;
+const float yAxisMin = -1;
+const float yAxisMax = 1;
+
+// the shared seed complex number that will be frequently overwritten with audio information
 Complex c = Complex(0, 0);
+
+// this value is the loop count at which the intEscape function stops iterating
+const int BAILOUT = 20;
+
+// used in the intEscape function for figuring out the julia sets
 Complex f(Complex x) {
 	return x.multiply(x).add(c);
 }
@@ -60,8 +65,6 @@ int intEscape(Complex c) {
 	int loopCount = 0;
 	while (c.lessThan(num) && loopCount < BAILOUT) {
 		c = f(c);
-		//std::cout << dist(c.imaginary, c.real, 0, 0) << std::endl;
-		//std::cout << c.imaginary << " " << c.real << std::endl;
 		loopCount++;
 	}
 
@@ -69,17 +72,24 @@ int intEscape(Complex c) {
 		return loopCount;
 	} else return -1;
 };
-float xx1 = -1.5;
-float xx2 = 1.5;
-float yx1 = -1;
-float yx2 = 1;
+
+float interpolate(float var, float min1, float max1, float min2, float max2) {
+	float numerator = (var - min1) * (max2 - min2);
+	float denominator = (max1 - min1);
+	float ret =  min2 + (numerator / denominator);
+	return ret;
+};
 
 
+/*
+ * Calculate the value of the julia function at this point.
+ * @i the int value corresponding to the column pixel
+ * @j the int value corresponding to the row pixel
+ */
 float julia (float i, float j, int width, int height) {
-	// notes, for audio we're really going to want to keep the real and imaginary components between -1 and 1
-	// keep display between -1.5 and 1.5 or maybe 2 and -2
-	float real = interpolate(i, 0, width-1, xx1, xx2);
-	float imaginary = interpolate(j, 0, height-1, yx1, yx2);
+
+	float real = interpolate(i, 0, width-1, xAxisMin, xAxisMax);
+	float imaginary = interpolate(j, 0, height-1, yAxisMin, yAxisMax);
 	Complex complexSeed = Complex(real, imaginary);
 	int esc = intEscape(complexSeed);
 	if (esc == -1) {
@@ -89,35 +99,21 @@ float julia (float i, float j, int width, int height) {
 	}
 }
 
-std::string char_ = "\u2588";
 
-std::string black = "\033[22;30m";
-std::string red = "\033[22;31m";
-std::string l_red = "\033[01;31m";
-std::string green = "\033[22;32m";
-std::string l_green = "\033[01;32m";
-std::string orange = "\033[22;33m";
-std::string yellow = "\033[01;33m";
-std::string blue = "\033[22;34m";
-std::string l_blue = "\033[01;34m";
-std::string magenta = "\033[22;35m";
-std::string l_magenta = "\033[01;35m";
-std::string cyan = "\033[22;36m";
-std::string l_cyan = "\033[01;36m";
-std::string gray = "\033[22;37m";
-std::string white = "\033[01;37m";
-
-void drawJulia(int width, int heigth) {
-
-
+/*
+ * Generates a string with all of the color values for the julia set 
+ * on a screen of size width*height.
+ * It then writes that string to the console. 
+*/
+void drawJulia(int width, int height) {
 	std::stringstream frame;
-	for (int j = 0; j < heigth; j++) {
+	for (int j = 0; j < height; j++) {
 		for (int i = 0; i < width; i++) {
 			
 			// float x = x_start + j*dx; // current real value
 			// float y = y_fin - i*dy; // current imaginary value
 			
-			float value = 100*julia(i, j, width, heigth);
+			float value = 100*julia(i, j, width, height);
 			
 			if (value == 100) {frame << " ";}
 			else if (value > 90) {frame << red << char_;}
@@ -138,38 +134,48 @@ void drawJulia(int width, int heigth) {
 		}
 		frame << std::endl;
 	}
-	frame << "\033[2J\033[1;1H";
+	frame << "\033[2J\033[1;1H"; // this clears the screen
 	std::cout << frame.str();
 }
+// END JULIA FUNCTIONS //
+
+
+
+// PulseAudio functions and variables //
+
+// currentlyDisplayed holds the current volume level the user is seeing.
+// This is done to allow for gradual level decay (prevents choppiness).
 int currentlyDisplayedLeft = 0;
-int currentlyDisplayedRight = 0;
+//int currentlyDisplayedRight = 0;
 void setDisplayLevel() {
 	pa_simple *s;
     pa_sample_spec ss;
     pa_buffer_attr pb;
+	// I don't know what either of these values should be but they work
+	// shamelessly copied from cava:
+	// https://github.com/karlstav/cava
     pb.maxlength = (uint32_t) - 1;
     pb.fragsize = 1024 / 8 * 2 * 2;
-
 
     ss.format = PA_SAMPLE_S16NE;
     ss.channels = 2;
     ss.rate = 44100;
     int error;
     s = pa_simple_new(NULL,               // Use the default server.
-                    "Fooapp",           // Our application's name.
+                    "Julia Visualizer",           // Our application's name.
                     PA_STREAM_RECORD,
                     NULL,               // Use the default device.
                     "Music",            // Description of our stream.
                     &ss,                // Our sample format.
                     NULL,               // Use default channel map
-                    NULL,               // Use default buffering attributes.
+                    &pb,               // Use default buffering attributes.
                     &error
                     );
 	
-
     int decayByL = 5;
     int decayByR = 5;
 
+	// capture the audio frames, determine volume and decay, set the volume level to display
 	for(;;) {
 
         int frames = 2048;
@@ -179,10 +185,9 @@ void setDisplayLevel() {
             break;
         }
 		
-        //std::cout << buf[0] << std::endl;
+		// skip every two, as buf[0] is left but buf[1] is right channel for same time
         for (int i = 0; i<frames; i+=2) {
             // left
-            //buf[i] = sqrt(pow(buf[i], 2));
             int measuredLeft = sqrt(pow(buf[i], 2));
             if (currentlyDisplayedLeft > measuredLeft) {
                 currentlyDisplayedLeft -= decayByL;
@@ -199,7 +204,6 @@ void setDisplayLevel() {
             //     currentlyDisplayedRight = measuredRight;
             // }
 
-
             if (currentlyDisplayedLeft < 0) {
                 currentlyDisplayedLeft = 0;
             }
@@ -207,39 +211,44 @@ void setDisplayLevel() {
     
     }
 }
-
+// end pulseaudio functions //
 
 int main() {
+
+	// get the window size to set the width and height params
     struct winsize w;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-
-	//testInterpolate();
-	//return 0;
-	int width = w.ws_col; //number of characters fitting horizontally on my screen 
-	int heigth = w.ws_row; //number of characters fitting vertically on my screen
+	const int width = w.ws_col; //number of characters fitting horizontally on my screen 
+	const int height = w.ws_row; //number of characters fitting vertically on my screen
     
+	// Put the audio capture in its own thread
 	std::thread getAudioSamples(setDisplayLevel);
 
+	// the rate at which the imaginary component oscilates
 	float di = -.005;
+	// the max (and -min) of the imaginary component oscilation
+	const float imaginaryRange = 1;
 
-    int skip = 256;
-    int frameCount = 1;
     for(;;) {
 
+		// Map the display audio level to something that looks interesting in the julia map
 		float real = interpolate(currentlyDisplayedLeft, 0, 16383, -.85, -.5);
-		//std::cout << real << std::endl;
 		float imaginary = c.imaginary+di;
-		if (imaginary > 1 || imaginary < -1) {
+
+		if (imaginary > imaginaryRange || imaginary < -imaginaryRange) {
 			di = -di;
 		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
-		c = Complex(real, imaginary);
-		// std::thread first (drawJulia, width, heigth);
-		// first.join();
-		drawJulia(width, heigth);
 
-    
+		// This is necessary to slow down the main thread. Otherwise it introduces graphical glitches
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
+
+		// change the Julia seed to reflect the calculated audio values
+		c = Complex(real, imaginary);
+
+		// calcluate and draw the julia set
+		drawJulia(width, height);
     }
 
+	// reconnect the sampling thread
 	getAudioSamples.join();
 }
