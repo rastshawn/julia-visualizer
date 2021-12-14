@@ -10,7 +10,8 @@
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
                 "-lpulse-simple",
-                "-lpulse"
+                "-lpulse",
+                "-pthread"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
