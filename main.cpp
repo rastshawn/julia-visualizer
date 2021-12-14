@@ -69,10 +69,10 @@ int intEscape(Complex c) {
 		return loopCount;
 	} else return -1;
 };
-float xx1 = -2;
-float xx2 = 2;
-float yx1 = -1.5;
-float yx2 = 1.5;
+float xx1 = -1.5;
+float xx2 = 1.5;
+float yx1 = -1;
+float yx2 = 1;
 
 
 float julia (float i, float j, int width, int height) {
@@ -89,23 +89,23 @@ float julia (float i, float j, int width, int height) {
 	}
 }
 
-	std::string char_ = "\u2588";
+std::string char_ = "\u2588";
 
-	std::string black = "\033[22;30m";
-	std::string red = "\033[22;31m";
-	std::string l_red = "\033[01;31m";
-	std::string green = "\033[22;32m";
-	std::string l_green = "\033[01;32m";
-	std::string orange = "\033[22;33m";
-	std::string yellow = "\033[01;33m";
-	std::string blue = "\033[22;34m";
-	std::string l_blue = "\033[01;34m";
-	std::string magenta = "\033[22;35m";
-	std::string l_magenta = "\033[01;35m";
-	std::string cyan = "\033[22;36m";
-	std::string l_cyan = "\033[01;36m";
-	std::string gray = "\033[22;37m";
-	std::string white = "\033[01;37m";
+std::string black = "\033[22;30m";
+std::string red = "\033[22;31m";
+std::string l_red = "\033[01;31m";
+std::string green = "\033[22;32m";
+std::string l_green = "\033[01;32m";
+std::string orange = "\033[22;33m";
+std::string yellow = "\033[01;33m";
+std::string blue = "\033[22;34m";
+std::string l_blue = "\033[01;34m";
+std::string magenta = "\033[22;35m";
+std::string l_magenta = "\033[01;35m";
+std::string cyan = "\033[22;36m";
+std::string l_cyan = "\033[01;36m";
+std::string gray = "\033[22;37m";
+std::string white = "\033[01;37m";
 
 void drawJulia(int width, int heigth) {
 
@@ -133,35 +133,18 @@ void drawJulia(int width, int heigth) {
 			else if (value > 5) {frame << magenta << char_;}
 			else {frame << l_magenta << char_;}
 
-
-			/*
-			Testing Screen Grid
-			float interpH = interpolate(i, 0, heigth-1, yx1, yx2);
-			float interpW = interpolate(j, 0, width-1, xx1, xx2);
-			cout << abs((int) interpW)+ abs((int) interpH);
-			*/
-			
-			
-			//cout << value << endl;
 			
 			frame << "\033[0m";
 		}
-		//cout << endl;
+		frame << std::endl;
 	}
 	frame << "\033[2J\033[1;1H";
 	std::cout << frame.str();
 }
-
-int main() {
-    struct winsize w;
-	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-
-	//testInterpolate();
-	//return 0;
-	int width = w.ws_col; //number of characters fitting horizontally on my screen 
-	int heigth = w.ws_row; //number of characters fitting vertically on my screen
-    
-    pa_simple *s;
+int currentlyDisplayedLeft = 0;
+int currentlyDisplayedRight = 0;
+void setDisplayLevel() {
+	pa_simple *s;
     pa_sample_spec ss;
     pa_buffer_attr pb;
     pb.maxlength = (uint32_t) - 1;
@@ -182,41 +165,22 @@ int main() {
                     NULL,               // Use default buffering attributes.
                     &error
                     );
+	
 
-    int currentlyDisplayedLeft = 0;
-    int currentlyDisplayedRight = 0;
-    int decayByL = 10;
-    int decayByR = 10;
+    int decayByL = 5;
+    int decayByR = 5;
 
-	float di = -.002;
+	for(;;) {
 
-    int skip = 256;
-    int frameCount = 1;
-    for(;;) {
-
-        int frames = 4000;
+        int frames = 2048;
         short buf[frames];
         if (pa_simple_read(s, buf, sizeof(buf), &error) < 0){
             std::cout << "Error reading " << error;
             break;
         }
-		float real = interpolate(currentlyDisplayedLeft, 0, 16383, -2.5, 1);
-		//std::cout << real << std::endl;
-		float imaginary = c.imaginary+di;
-		if (imaginary > 1 || imaginary < -1) {
-			di = -di;
-		}
-		c = Complex(real, imaginary);
-		std::thread first (drawJulia, width, heigth);
 		
         //std::cout << buf[0] << std::endl;
         for (int i = 0; i<frames; i+=2) {
-
-			
-            //std::cout << "left: " << (short) buf[i] << " right: " << (short) (buf[i+1]) << std::endl;
-			
-
-
             // left
             //buf[i] = sqrt(pow(buf[i], 2));
             int measuredLeft = sqrt(pow(buf[i], 2));
@@ -227,48 +191,55 @@ int main() {
                 //decayByL = 1;
                 currentlyDisplayedLeft = measuredLeft;
             }
-            
-            // right
-            int measuredRight = sqrt(pow(buf[i+1], 2));
-            if (currentlyDisplayedRight > measuredRight) {
-                currentlyDisplayedRight -= decayByR;
-            } else {
-                currentlyDisplayedRight = measuredRight;
-            }
+            // // right
+            // int measuredRight = sqrt(pow(buf[i+1], 2));
+            // if (currentlyDisplayedRight > measuredRight) {
+            //     currentlyDisplayedRight -= decayByR;
+            // } else {
+            //     currentlyDisplayedRight = measuredRight;
+            // }
 
-            //std::string channel = (i%2 == 0) ? "L: " : "R: ";
+
             if (currentlyDisplayedLeft < 0) {
                 currentlyDisplayedLeft = 0;
             }
-            //int outputL = currentlyDisplayedLeft;
-            // std::cout << "L: " << currentlyDisplayedLeft << std::endl;
         }
-
-			first.join();
-            //} else {
-				//frameCount++;
-			//}
-        // for (int currentFrame = 0; currentFrame < frames; currentFrame++) {
-        //     uint8_t measuredLevel = buf[currentFrame];
-        //     // decay
-        //     if (currentlyDisplayedLevel > measuredLevel) {
-        //         currentlyDisplayedLevel -= decayBy;
-        //         decayBy *= 5;
-        //     } else {
-        //         currentlyDisplayedLevel = measuredLevel;
-        //         decayBy = 0;
-        //     }
-
-        //     if (currentFrame%skip == 0) {
-        //         //std::cout << currentlyDisplayedLevel << std::endl;
-
-        //         // int numDashes = currentlyDisplayedLevel / 600;
-        //         // std::string output(numDashes, '-');
-        //         // std::cout << output << std::endl;
-                
-        //         std::cout << measuredLevel << std::endl;
-        //     }
-        // }
     
     }
+}
+
+
+int main() {
+    struct winsize w;
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+
+	//testInterpolate();
+	//return 0;
+	int width = w.ws_col; //number of characters fitting horizontally on my screen 
+	int heigth = w.ws_row; //number of characters fitting vertically on my screen
+    
+	std::thread getAudioSamples(setDisplayLevel);
+
+	float di = -.005;
+
+    int skip = 256;
+    int frameCount = 1;
+    for(;;) {
+
+		float real = interpolate(currentlyDisplayedLeft, 0, 16383, -.85, -.5);
+		//std::cout << real << std::endl;
+		float imaginary = c.imaginary+di;
+		if (imaginary > 1 || imaginary < -1) {
+			di = -di;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
+		c = Complex(real, imaginary);
+		// std::thread first (drawJulia, width, heigth);
+		// first.join();
+		drawJulia(width, heigth);
+
+    
+    }
+
+	getAudioSamples.join();
 }
